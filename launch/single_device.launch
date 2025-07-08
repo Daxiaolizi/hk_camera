@@ -17,7 +17,6 @@
         <param name="enable_resolution" value="true"/>
         <param name="resolution_ratio_width" value="3072"/>
         <param name="resolution_ratio_height" value="2048"/>
-        <param name="gain_value" value="15.0"/>
         <rosparam command="load" file="$(find hk_camera)/config/hk_left.yaml"/>
         <remap from="/hk_camera/imu_trigger" to="/rm_ecat_hw/imu_trigger"/>
     </node>
