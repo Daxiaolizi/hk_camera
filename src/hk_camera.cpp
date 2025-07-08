@@ -53,8 +53,12 @@ void HKCameraNodelet::onInit()
   nh_.param("resolution_ratio_height", resolution_ratio_height_, 2048);
   nh_.param("stop_grab", stop_grab_, false);
   nh_.param("nIndex", nIndex_, 0);
+  nh_.param("enable_software_trigger", enable_software_trigger_, false);
 
   info_manager_.reset(new camera_info_manager::CameraInfoManager(nh_, camera_name_, camera_info_url_));
+
+  ROS_INFO("Camera %s: enable_software_trigger=%d, enable_imu_trigger=%d",
+           camera_name_.c_str(), enable_software_trigger_, enable_imu_trigger_);
 
   // check for default camera info
   if (!info_manager_->isCalibrated())
@@ -165,7 +169,26 @@ void HKCameraNodelet::onInit()
   {
     assert(MV_CC_SetEnumValue(dev_handle_, "TriggerMode", 0) == MV_OK);
   }
-  MV_CC_RegisterImageCallBackEx(dev_handle_, onFrameCB, dev_handle_);
+
+  if (enable_software_trigger_)
+  {
+    int nRet = MV_CC_SetEnumValue(dev_handle_, "TriggerMode", 1);
+    if (nRet != MV_OK)
+    {
+      ROS_ERROR("Failed to set TriggerMode for camera %s: 0x%x", camera_name_.c_str(), nRet);
+      exit(-1);
+    }
+    nRet = MV_CC_SetEnumValue(dev_handle_, "TriggerSource", MV_TRIGGER_SOURCE_SOFTWARE);
+    if (nRet != MV_OK)
+    {
+      ROS_ERROR("Failed to set TriggerSource for camera %s: 0x%x", camera_name_.c_str(), nRet);
+      exit(-1);
+    }
+    software_trigger_sub_ = nh_.subscribe("/camera_trigger", 10, &HKCameraNodelet::softwareTriggerCB, this);
+    ROS_INFO("Software trigger enabled for camera %s", camera_name_.c_str());
+  }
+
+  MV_CC_RegisterImageCallBackEx(dev_handle_, onFrameCBStatic, this);
 
   if (MV_CC_StartGrabbing(dev_handle_) == MV_OK)
   {
@@ -256,12 +279,23 @@ bool HKCameraNodelet::fifoRead(TriggerPacket& pkt)
   return true;
 }
 
-void HKCameraNodelet::onFrameCB(unsigned char* pData, MV_FRAME_OUT_INFO_EX* pFrameInfo, void* pUser)
+void HKCameraNodelet::onFrameCBStatic(unsigned char* pData, MV_FRAME_OUT_INFO_EX* pFrameInfo, void* pUser)
+{
+  HKCameraNodelet* self = static_cast<HKCameraNodelet*>(pUser);
+  self->onFrameCB(pData, pFrameInfo);
+}
+
+void HKCameraNodelet::onFrameCB(unsigned char* pData, MV_FRAME_OUT_INFO_EX* pFrameInfo)
 {
   if (pFrameInfo)
   {
     ros::Time now = ros::Time::now();
-    if (enable_imu_trigger_)
+    if (enable_software_trigger_)
+    {
+      image_.header.stamp = trigger_time_;
+      info_.header.stamp = trigger_time_;
+    }
+    else if (enable_imu_trigger_)
     {
       if (!trigger_not_sync_)
       {
@@ -464,6 +498,36 @@ void HKCameraNodelet::reconfigCB(CameraConfig& config, uint32_t level)
   take_photo_ = config.take_photo;
   //  Width offset of image
   //  width_ = config.width_offset;
+}
+
+void HKCameraNodelet::softwareTriggerCB(const std_msgs::Time::ConstPtr& msg)
+{
+  trigger_time_ = msg->data; // 存储触发时间戳
+  ROS_INFO("Received trigger for camera %s at time %f", camera_name_.c_str(), trigger_time_.toSec());
+  MVCC_ENUMVALUE trigger_mode, trigger_source;
+  int nRet = MV_CC_GetEnumValue(dev_handle_, "TriggerMode", &trigger_mode);
+  if (nRet != MV_OK || trigger_mode.nCurValue != 1)
+  {
+    ROS_ERROR("Camera %s not in trigger mode: 0x%x, current mode: %u",
+              camera_name_.c_str(), nRet, trigger_mode.nCurValue);
+    return;
+  }
+  nRet = MV_CC_GetEnumValue(dev_handle_, "TriggerSource", &trigger_source);
+  if (nRet != MV_OK || trigger_source.nCurValue != MV_TRIGGER_SOURCE_SOFTWARE)
+  {
+    ROS_ERROR("Camera %s TriggerSource not set to Software: 0x%x, current source: %u",
+              camera_name_.c_str(), nRet, trigger_source.nCurValue);
+    return;
+  }
+  nRet = MV_CC_SetCommandValue(dev_handle_, "TriggerSoftware");
+  if (nRet == MV_OK)
+  {
+    ROS_INFO("Software trigger sent for camera %s at time %f", camera_name_.c_str(), trigger_time_.toSec());
+  }
+  else
+  {
+    ROS_ERROR("Failed to send software trigger for camera %s, error code: 0x%x", camera_name_.c_str(), nRet);
+  }
 }
 
 HKCameraNodelet::~HKCameraNodelet()

@@ -37,6 +37,7 @@ include_directories(
 
 add_library(hk_camera
         src/hk_camera.cpp
+        src/camera_trigger_publisher.cpp
         )
 
 
@@ -50,3 +51,7 @@ add_dependencies(hk_camera ${PROJECT_NAME}_gencfg)
 #add_dependencies(hk_camera_node ${PROJECT_NAME}_gencfg)
 #target_link_libraries(hk_camera_node
 #        libMvCameraControl.so ${catkin_LIBRARIES} ${Opencv_LIBS})
+
+add_executable(camera_trigger_publisher
+        src/camera_trigger_publisher.cpp)
+target_link_libraries(camera_trigger_publisher ${catkin_LIBRARIES})
