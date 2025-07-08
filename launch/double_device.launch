@@ -21,6 +21,7 @@
         <param name="gamma_selector" value="0"/>
         <param name="gamma_value" value="0.7"/>
         <param name="stop_grab" value="false"/>
+        <param name="enable_software_trigger" value="true"/>
         <remap from="/image_rect" to="/image_rect_right"/>
     </node>
 
@@ -46,7 +47,11 @@
         <param name="gamma_value" value="0.7"/>
         <param name="sleep_time" value="5"/>
         <param name="stop_grab" value="false"/>
+        <param name="sleep_time" value="5"/>
+        <param name="enable_software_trigger" value="true"/>
         <remap from="/image_rect" to="/image_rect_left"/>
     </node>
+
+    <node pkg="hk_camera" type="camera_trigger_publisher" name="camera_trigger_publisher" output="screen" />
 
 </launch>

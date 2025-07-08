@@ -17,6 +17,7 @@
 #include <rm_msgs/EnableImuTrigger.h>
 #include <termios.h>
 #include <std_msgs/String.h>
+#include <std_msgs/Time.h>
 
 namespace hk_camera
 {
@@ -40,6 +41,7 @@ private:
   void triggerCB(const sensor_msgs::TimeReference::ConstPtr& time_ref);
   void enableTriggerCB(const ros::TimerEvent&);
   void cameraChange(const std_msgs::String);
+  void softwareTriggerCB(const std_msgs::Time::ConstPtr& msg);
 
   ros::NodeHandle nh_;
   static void* dev_handle_;
@@ -89,8 +91,12 @@ private:
   static bool take_photo_;
   static int count_;
   ros::ServiceServer imu_correspondence_service_;
-  static void __stdcall onFrameCB(unsigned char* pData, MV_FRAME_OUT_INFO_EX* pFrameInfo, void* pUser);
+  static void onFrameCBStatic(unsigned char* pData, MV_FRAME_OUT_INFO_EX* pFrameInfo, void* pUser);
+  void onFrameCB(unsigned char* pData, MV_FRAME_OUT_INFO_EX* pFrameInfo);
   ros::Subscriber camera_change_sub;
+  bool enable_software_trigger_{};
+  ros::Subscriber software_trigger_sub_;
+  ros::Time trigger_time_;
 };
 }  // namespace hk_camera
 
